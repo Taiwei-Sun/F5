@@ -1,0 +1,1045 @@
+
+0 2 * * *  /root/msgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_msg.log
+0 2 * * *  /root/tdr_tarftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_tdrtar.log
+*/30 * * * *  /root/tdr_uploadftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_tdr_15mins.log
+*/10 * * * *  /root/webuiftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_webui.log
+15 3 * * *  /root/cfgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_cfg.log
+
+30 1 * * * /opt/traffix/sdc/utils/system/linux/backup_and_restore/backup_traffix_no_splunk.sh
+0 4 * * *  /root/autocsvftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_autocsv.log
+05 00 * * *  /opt/splunksearch/splunk/bin/scripts/autoreporting.sh
+
+#time sync
+0 0 * * * /usr/sbin/ntpdate -s 172.18.0.101
+
+#20170221_for_config_diff
+0 4 * * * /root/20170106_DEAW_config_diff.sh
+0 4 * * * /root/20170106_DEAX_config_diff.sh
+10 6 */3 * * /root/DeaConfigureBackupDailyRemoveOldLog.sh
+
+#20170221_for_interface_check
+* */1 * * * /root/DEA_interface_check.sh
+0 6 */3 * * /root/DeaInterfaceCheckRemoveOldLog.sh
+
+
+
+########################
+-rwxr-xr-x 1 root root 476 May  2  2014 /opt/splunksearch/splunk/bin/scripts/autoreporting.sh
+
+#!/bin/bash
+# Change all report right to 744 
+sleep 60
+cd /opt/splunksearch/splunk/var/run/splunk
+chmod 744 EMS_report*.csv
+
+# Rename all reportname with timestamp suffix
+# Move all renamed reports to /opt/traffix/autoreport
+NEWPATH=/opt/traffix/autoreporting/
+
+TS=`date +%Y%m%d`
+for report in EMS_report*.csv
+do
+mv $report $NEWPATH${report%.*}-$TS.csv 
+done
+
+#ls -la $NEWPATH
+#Check and remove report files that are older than 3 days.
+find $NEWPATH -mtime +3 -type f -delete
+
+
+########################
+-rwxr-xr-x 1 root root 705 Mar 27  2014 /root/msgftp.sh
+
+#!/bin/sh
+host="172.18.9.183"
+
+
+logname="message"
+#logname="webui"
+
+id="tacm_dea"
+pw="tacm_dea@1234"
+#remodir="/tmp"
+remodir="/opt/ftp/tacm_dea"
+
+localdir="/var/log"
+#localdir="/opt/traffix/sdc/logs/webui"
+tfile="/tmp_file"
+#mkdir $localdir/tmp_file
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+cd $localdir
+filename="`ls -t $logname* | head -1`"
+cp -a $localdir/$filename $localdir/tmp_file/$logname".log_`hostname`_`date +%Y%m%d%H%M%S`"
+
+echo "open $host
+user $id $pw
+lcd $localdir/tmp_file
+binary
+cd $remodir/backup
+put *
+bye
+" | ftp -vin
+cd $localdir/tmp_file
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l >> /tmp/uploaded_log.txt
+rm -f $localdir/tmp_file/*
+
+########################
+-rwxr-xr-x 1 root root 3192 Jun 14  2015 /root/tdr_tarftp.sh
+
+#!/bin/sh
+#current version: tdr_tarftp_20140901-1, last version: tdr_tarftp_20140827-1
+sleep 30
+
+host="172.27.21.120"
+logname="tdr"
+id="ftpdea"
+pw="user_0909"
+remodir="/LTE_Core/DEA/TDR/daily"
+localdir="/opt/traffix/reports/tdr"
+tfile="/tmp_file"
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+if [ ! -d "$localdir/tmp_tarfile" ]; then
+mkdir "$localdir/tmp_tarfile"
+fi
+
+if [ ! -d "$localdir/tmp_tarfile2" ]; then
+mkdir "$localdir/tmp_tarfile2"
+fi
+
+if [ ! -d "$localdir/tmp_tarftpfile" ]; then
+mkdir "$localdir/tmp_tarftpfile"
+fi
+
+cd $localdir/tmp_tarfile
+filename="`find . -mmin -1560 -mmin +120 ! -type d -exec basename {} \; `"
+echo $filename > "/tmp/$logname""_tar_ftplist.log"
+
+if [ -z `cat /tmp/$logname""_tar_ftplist.log` ] ; then
+
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+echo No tar  TDR file found !!  >> /tmp/uploaded_log.txt
+ls -l $localdir/tmp_tarfile >> /tmp/uploaded_log.txt
+echo "######################" >> /tmp/uploaded_log.txt
+exit 0
+fi
+
+cat "/tmp/$logname""_tar_ftplist.log" | while read line
+do
+
+mv -f $localdir/tmp_tarfile/$line $localdir/tmp_tarfile2/.
+#move $filename".upload file from /tmp_tarfile to  /tmp_tarfile2
+
+done
+cd $localdir/tmp_tarfile2/
+tar -cf  $localdir/tmp_tarftpfile/TDR_tar_export_`date -d '1 day ago' +%m"-"%d"-"%Y`.tar .
+#make .tar file from /tmp_tarfile2/ and save on /tmp_tarftpfile 
+
+echo "open $host
+user $id $pw
+lcd $localdir/tmp_tarftpfile
+binary
+cd $remodir
+mput *
+bye
+" | > /tmp/one_day_ftp.log ftp -vin
+cd $localdir/tmp_tarftpfile/
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l >> /tmp/uploaded_log.txt
+echo " the tar file include as : " >> /tmp/uploaded_log.txt
+cat /tmp/$logname""_tar_ftplist.log >> /tmp/uploaded_log.txt
+echo " (the end) "  >> /tmp/uploaded_log.txt
+
+cat /tmp/one_day_ftp.log >> /opt/traffix/sdc/logs/webui/codeftp_tdrtar.log
+
+#if [ ! -d "/tmp/dump" ]; then
+#mkdir "/tmp/dump"
+#fi
+
+#cp  $localdir/tmp_tarfile2/* /tmp/dump
+#cp  $localdir/tmp_tarftpfile/* /tmp/dump
+#dump every uploaded file for keep local and monitor on /tmp/dump
+
+rm -f $localdir/tmp_tarfile2/*
+#/tmp_tarfile2 now is .upload files with 15mins saved TDR 
+
+#// check echo new ftp result to one_day_ftp.log
+RemoteFile=`cat /tmp/one_day_ftp.log |grep "226 Transfer OK" | wc -l`
+#RemoteFile=`cat /tmp/one_day_ftp.log |grep "226 File receive OK." | wc -l`
+#DEA use 226 Transfer OK
+#DRA use 226 File receive OK.
+
+LocalFile=`ls $localdir/tmp_tarftpfile | wc -l `
+
+if [ "$RemoteFile" != "" ] && [ $RemoteFile -eq $LocalFile  ]; then
+echo -ne "\n*****\n`hostname`_`date +%Y%m%d%H%M%S`\ntdr_tarftp.sh\nFollowing files FTP upload OK\n`ls -al $localdir/tmp_tarftpfile/`\n*****\n" >>  /tmp/uploaded_log.txt
+rm -f $localdir/tmp_tarftpfile/*
+#/tmp_tarftpfile now is tar file yesterday as one tar file
+else
+echo -ne "\n*****\n`hostname`_`date +%Y%m%d%H%M%S`\ntdr_tarftp.sh\nFollowing files FTP upload failed\n`ls -al $localdir/tmp_tarftpfile/`\n*****\n" >> /var/log/messages
+echo -ne "\n*****\n`hostname`_`date +%Y%m%d%H%M%S`\ntdr_tarftp.sh\nFollowing files FTP upload failed\n`ls -al $localdir/tmp_tarftpfile/`\n*****\n" >>  /tmp/uploaded_log.txt
+fi
+
+#becaue use find command, /tmp_tarfile dont need to clean.
+
+########################
+-rwxr-xr-x 1 root root 2320 Aug  8 10:10 /root/tdr_uploadftp.sh
+
+#!/bin/sh
+
+sleep 30
+
+#host2="172.16.1.176"
+host1="172.17.34.18"
+host2="172.16.20.195"
+host3="172.16.22.147"
+
+logname="tdr"
+
+id1="pdpftp"
+pw1="DEA2tvm"
+remodir1="dea_data"
+
+#id2="cdrfp"
+#pw2="cdr0935Ftp"
+#remodir2="/FMS/AP01/cdrfp/TWM_S6A"
+
+id2="cdrfp"
+pw2="cdr0935Ftp"
+remodir2="/FMS_ARC/cdrfp/TWM_S6A"
+
+id3="cdrftp"
+pw3="2016#Cdrexe"
+remodir3="/CMD/CDR/TWM/F5SDC"
+
+localdir="/opt/traffix/reports/tdr"
+tfile="/tmp_file"
+
+
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+if [ ! -d "$localdir/tmp_tarfile" ]; then
+mkdir "$localdir/tmp_tarfile"
+fi
+
+
+if [ ! -d "$localdir/tmp_tartfile2" ]; then
+mkdir "$localdir/tmp_tarfile2"
+fi
+
+if [ ! -d "/tmp/ftp_dump" ]; then
+mkdir "/tmp/ftp_dump"
+fi
+
+
+cd $localdir
+
+if [ "`find /opt/traffix/reports/tdr -maxdepth 1 -mmin -30 -type f  -exec basename {} \; | wc -l `" -gt 1 ] ; then
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+echo "TDR files found more than one,UnNormal!!"  >> /tmp/uploaded_log.txt
+echo "######################" >> /tmp/uploaded_log.txt
+
+exit 0
+fi
+
+filename="`find /opt/traffix/reports/tdr -maxdepth 1 -mmin -30 -type f  -exec basename {} \; `"
+#if [ ! -s /tmp/autocsvlist.log ] ; then
+if [ ! -e "$filename" ] ; then
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+echo No such TDR file found !!  >> /tmp/uploaded_log.txt
+echo "######################" >> /tmp/uploaded_log.txt
+
+exit 0
+fi
+
+cp -a $localdir/$filename $localdir/tmp_file/$filename".upload"
+cp -a $localdir/tmp_file/* /tmp/ftp_dump/
+
+echo "open $host2
+user $id2 $pw2
+lcd $localdir$tfile
+binary
+cd $remodir2
+put *
+bye
+" | ftp -vin
+cd $localdir$tfile
+echo `hostname`_`date +%Y%m%d%H%M%S`"--"$host2  >> /tmp/uploaded_log.txt
+echo $localdir/tmp_file/$filename".upload" >> /tmp/uploaded_log.txt
+
+
+
+echo "open $host1
+user $id1 $pw1
+lcd $localdir$tfile
+binary
+cd $remodir1
+put *
+bye
+" | ftp -vin
+cd $localdir$tfile
+echo `hostname`_`date +%Y%m%d%H%M%S`"--"$host1 >> /tmp/uploaded_log.txt
+echo $localdir/tmp_file/$filename".upload" >> /tmp/uploaded_log.txt
+
+
+
+echo "open $host3
+user $id3 $pw3
+lcd $localdir$tfile
+binary
+cd $remodir3
+put *
+bye
+" | ftp -vin
+cd $localdir$tfile
+echo `hostname`_`date +%Y%m%d%H%M%S`"--"$host3 >> /tmp/uploaded_log.txt
+echo $localdir/tmp_file/$filename".upload" >> /tmp/uploaded_log.txt
+
+
+mv -f $localdir$tfile/* $localdir/tmp_tarfile/.
+
+########################
+-rwxr-xr-x 1 root root 1320 Apr  3  2014 /root/webuiftp.sh
+
+#!/bin/sh
+#host="192.168.243.128"
+host="172.18.9.183 "
+
+#logname="message"
+logname="webui"
+
+id="tacm_dea"
+pw="tacm_dea@1234"
+#id="q1"
+#pw="111111"
+#remodir="/tmp"
+remodir="/opt/ftp/tacm_dea/"
+
+#localdir="/home/test/newest_file"
+#localdir="/var/log"
+localdir="/opt/traffix/sdc/logs/webui"
+tfile="/tmp_file"
+#mkdir $localdir/tmp_file
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+cd $localdir
+filename1="`ls -t $logname.log* | head -2 | head -1`"
+
+filename2="`ls -t $logname.log* | head -2 | tail -1`"
+
+datime="`date -d '10 minutes ago' +%F\ %H:%M | cut -c 1-15`"
+
+#cat $filename2 $filename1 | grep `date -d '4 months ago' +%F` >> $localdir$tfile/$logname".log_`hostname`_`date +%Y%m%d%H%M%S`"
+
+if cat $filename2 $filename1 | grep "$datime" &> /dev/null; then
+
+cat $filename2 $filename1 | grep "$datime" >> $localdir$tfile/$logname".log_`hostname`_`date +%Y%m%d%H%M%S`"
+#cp -a  grep10mins.log $localdir$tfile/$logname".log_`hostname`_`date +%Y%m%d%H%M%S`"
+#rm -f  grep10mins.log
+else touch $localdir/tmp_file/$logname".log_`hostname`_`date +%Y%m%d%H%M%S`"
+fi
+echo "open $host
+user $id $pw
+lcd $localdir/tmp_file
+binary
+cd $remodir/webui
+put *
+bye
+" | ftp -vin
+cd $localdir/tmp_file
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l >> /tmp/uploaded_log.txt
+rm -f $localdir/tmp_file/*
+
+########################
+-rwxr-xr-x 1 root root 2023 Feb 26  2015 /root/cfgftp.sh
+
+#!/bin/sh
+#current version: cfgftp_20150105-1, last version: cfgftp_20141014-1
+
+#DEA
+logname="backup-DEA"
+host="172.18.9.188"
+id="deabackup"
+pw="deabkup@140327"
+remodir="/"
+localdir="/opt/traffix/sdc/utils/system/linux/backup_and_restore"
+
+#DRA
+#logname="backup"
+#host="172.18.9.188"
+#id="drabackup"
+#pw="drabkup@140717"
+#remodir="/"
+#localdir="/opt/traffix/sdc/utils/system/linux/backup_and_restore"
+
+#DEA-splunk
+host2="172.18.9.183"
+logname2="message"
+id2="tacm_dea"
+pw2="tacm_dea@1234"
+remodir2="/opt/ftp/tacm_dea/vmbackup"
+localdir2="/var/log"
+
+#DRA-splunk
+#host2="172.18.9.183"
+#id2="volte_dra"
+#pw2="volte_dra@1234"
+#remodir2="/opt/ftp/volte_dra"
+
+
+tfile="/tmp_file"
+
+ping $host -c 4 &> /dev/null
+if [ ! "$?" == 0 ]; then
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+echo "FTP host connection down" >> /tmp/uploaded_log.txt
+echo "######################" >> /tmp/uploaded_log.txt
+exit 0
+fi
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+cd $localdir
+filename="`ls -t $logname* | head -1`"
+#find the latest backup-DEA config file from /opt/traffix/sdc/utils/system/linux/backup_and_restore
+
+ftp_log="ftp_config_log_`hostname`_`date +%Y%m%d%H%M%S`.txt"
+
+echo "open $host
+user $id $pw
+lcd $localdir
+binary
+cd $remodir
+put $filename
+bye
+" | ftp -vin > $localdir$tfile/$ftp_log
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l $filename >> /tmp/uploaded_log.txt
+
+echo "open $host2
+user $id2 $pw2
+lcd $localdir$tfile
+binary
+cd $remodir2
+put $ftp_log
+bye
+" | ftp -vin
+cd $localdir/tmp_file
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l >> /tmp/uploaded_log.txt
+
+if [ ! -d "/opt/tmp/dump" ]; then
+mkdir -p "/opt/tmp/dump"
+fi
+#cp -a $localdir/$filename /opt/tmp/dump
+#config size is too big to save...
+
+cp -a $localdir$tfile/$ftp_log /opt/tmp/dump
+#ALL dump file send to /opt/tmp/dump from this version
+#dump every uploaded file for keep local and monitor on /opt/tmp/dump
+
+rm -f $localdir$tfile/*
+#remove the message.log_hostname_date file we create
+
+########################
+-rwxr-xr-x 1 root root 4524 Feb 25  2015 /opt/traffix/sdc/utils/system/linux/backup_and_restore/backup_traffix_no_splunk.sh
+
+#!/bin/bash
+
+# No splunk version
+
+# Cron safety valve
+#set -x
+basename=`basename $0`
+pidfile=/var/tmp/$basename.pid
+
+if [ -r $pidfile ]; then
+        pidvalue=`cat $pidfile`
+        pidcount=`ps -p $pidvalue|grep -c $basename|wc -l`
+        if [ $pidcount -ne 0 ]; then
+                # dead pidfile
+                echo $$ > $pidfile
+                if [ $? -ne 0 ]; then
+                        echo Cant write $basename pid file |logger -i -t $basename -p daemon.notice
+                        exit 1
+                fi
+        else
+                # found live pid write error to syslog and exit
+                echo Found $basename zombie pid $pidvalue exiting |logger -i -t $basename -p daemon.notice
+                exit 1
+        fi
+else
+        # No pid file create it
+        echo $$ > $pidfile
+        if [ $? -ne 0 ]; then
+                echo Cant write $basename pid file |logger -i -t $basename -p daemon.notice
+                exit 1
+        fi
+fi
+
+TRAFFIX_DIR="/opt/traffix/sdc"
+BACKUP_HOME="$TRAFFIX_DIR/utils/system/linux/backup_and_restore"
+
+timestamp=`date +%Y%m%d%H%M%S`
+# Log backup start time
+echo SDC Backup started |logger -t SDC_backup
+
+# Save cluster configuration
+rm -f /tmp/crm_config.txt 2>/dev/null
+su - -c "/usr/sbin/crm configure save /tmp/crm_config.txt &>/dev/null"
+if [ $? -eq 0 ]; then
+        echo Cluster config saved for backup 
+else
+        echo Cluster config backup failed 
+fi
+
+# Loop over list and make a new list with files found
+while read line
+do
+	for filedir in $line
+	do
+		if [ -f $filedir ] || [ -d $filedir ]; then
+			echo $filedir >> /tmp/filedirs_found.txt
+		else
+			# suppress warnings for comments
+                        echo $line | grep '^#' &>/dev/null
+                        if [ $? -eq 0 ]; then
+                                :
+                        else
+                                if [ "$filedir" != "/opt/traffix/sdc/cpf/config/ss7" ]
+                                then
+                                    if [ "$filedir" == "/opt/splunk/var/lib/" ]
+                                    then
+                                        grep ^isManager /opt/traffix/sdc/config/sysconfig/traffix|grep true &> /dev/null
+                                        if [ $? -eq 0 ]
+                                        then
+                                            echo WARNING $filedir not found
+                                            echo WARNING Backup of $filedir failed|logger -t SDC_backup
+                                        fi
+                                    else
+                                        echo WARNING $filedir not found
+                                        echo WARNING Backup of $filedir failed|logger -t SDC_backup
+                                    fi
+                                fi
+                        fi
+		fi
+
+	done
+done < $BACKUP_HOME/files.txt
+
+# Prepare for splunk backup incase splunk exists
+#grep ^isManager /opt/traffix/sdc/config/sysconfig/traffix|grep true &> /dev/null
+#if [ $? -eq 0 ]
+#then
+#${TRAFFIX_DIR}/utils/system/linux/backup_and_restore/splunk_roll_hot_buckets.sh start -auto
+#fi
+
+# Create a tar file
+# Run 100 backups and continue when tar is ok
+for ((i=1;i<=100;i++))
+do
+	if [ $i -eq 100 ]; then
+		echo "Error SDC backup failed check syslog for errors"
+		echo "Error $i SDC backup failed check syslog for errors"|logger -t SDC_backup
+		exit 1
+	fi
+
+	# Add /tmp/filedirs_found.txt to backup list
+	echo "/tmp/filedirs_found.txt" >> /tmp/filedirs_found.txt
+	tar cf $BACKUP_HOME/backup-$HOSTNAME-$timestamp.tar -T /tmp/filedirs_found.txt --exclude=$BACKUP_HOME/*hot_v1_*
+		if [ $? -eq 0 ]; then
+				echo "Your backup file is backup-$HOSTNAME-$timestamp.tar"
+				echo "SDC backup saved to backup-$HOSTNAME-$timestamp.tar" |logger -t SDC_backup
+				break
+		else
+				# Delete bad tar
+				rm -f backup-$HOSTNAME-$timestamp.tar
+				echo $i |logger -t SDC_backup
+				return
+		fi
+done
+#added by SayPing
+#gzip backup-$HOSTNAME-$timestamp.tar
+rm -f /tmp/crm_config.txt 2>/dev/null
+rm -f /tmp/filedirs_found.txt 
+
+# Temp retention plan < 7 tars to be replaced with log rotate
+# update 3 to 7 on 2015/2/25
+tar_count=`ls -1 $BACKUP_HOME/backup-$HOSTNAME*|wc -l`
+if [ $tar_count -gt 7 ]; then
+        oldest=`ls -1rt $BACKUP_HOME/backup-$HOSTNAME*|head -1`
+        \rm $oldest
+	if  [ $? -eq 0 ]; then
+        	echo Deleted $oldest |logger -t SDC_backup
+	else
+        	echo Error delete of $oldest failed|logger -t SDC_backup
+	fi
+fi
+
+# Log backup end time
+echo SDC Backup ended |logger -t SDC_backup
+
+########################
+-rwxr-xr-x 1 root root 1246 May  7  2014 /root/autocsvftp.sh
+
+#!/bin/sh
+host="172.27.21.120"
+#host="172.18.9.188"
+#host="192.168.243.128"
+#host="172.18.9.183 "
+
+
+#logname="message"
+#logname="webui"
+#logname="backup-DEA"
+
+id="ftpdea"
+pw="user_0909"
+#remodir="/tmp"
+remodir="/LTE_Core/DEA"
+
+#localdir="/var/log"
+#localdir="/opt/traffix/sdc/logs/webui"
+#localdir="/opt/traffix/sdc/utils/system/linux/backup_and_restore"
+localdir="/opt/traffix/autoreporting"
+tfile="/tmp_file"
+#mkdir $localdir/tmp_file
+
+if [ ! -d "$localdir$tfile" ]; then
+mkdir "$localdir$tfile"
+fi
+
+cd $localdir
+
+TS=`date +%Y%m%d`
+ls -t ./*$TS* > /tmp/autocsvlist.log
+
+if [ ! -s /tmp/autocsvlist.log ] ; then
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+echo No such file found !!  >> /tmp/uploaded_log.txt
+echo "######################" >> /tmp/uploaded_log.txt
+
+exit 0
+fi
+
+
+cat /tmp/autocsvlist.log | while read line
+do
+
+#filename="`ls -t $logname* | head -1`"
+cp -a $localdir/$line $localdir/tmp_file/
+#cp -a $localdir/$filename $localdir/tmp_file/$filename
+done
+
+echo "open $host
+user $id $pw
+lcd $localdir$tfile
+binary
+cd $remodir
+mput *
+bye
+" | ftp -vin
+cd $localdir$tfile
+echo `hostname`_`date +%Y%m%d%H%M%S` >> /tmp/uploaded_log.txt
+ls -l >> /tmp/uploaded_log.txt
+#rm -f /tmp/autocsvlist.log
+rm -f $localdir/tmp_file/*
+
+########################
+-rwxrwxrwx 1 traffix traffix 7909 Aug  2  2017 /root/20170106_DEAW_config_diff.sh
+
+#!/bin/bash
+
+HOST="172.18.9.183"
+USER="tacm_dea"
+PASSWD="tacm_dea@1234"
+DATE=`date +%Y%m%d_%H%M`
+##DEAW variable decalration
+#configure_folder
+DEAW01_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW01_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+DEAW02_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW02_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+DEAW_DEFAULT_LB_CONFIGURATION=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/ |tail -2 |egrep \d |awk '{print $8}')
+DEAW_FEP_P_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+DEAW_FEP_R_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#flowManager_folder
+DEAW_FLOWMGR=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/ |tail -2 |egrep \d |awk '{print $8}')
+##DEAWDEAW variable decalration
+
+
+##DEAX variable decalration
+#configure_folder
+#DEAX01_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX01_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAX02_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX02_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAX_DEFAULT_LB_CONFIGURATION=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01 _traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAX_FEP_P_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAX_FEP_R_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#flowManager_folder
+#DEAX_FLOWMGR=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/ |tail -2 |egrep \d |awk '{print $8}')
+##DEAX variable decalration
+
+
+##Create backup folder
+if [ ! -d /DeaConfigureBackupDaily/ ]; then
+mkdir /DeaConfigureBackupDaily/
+fi
+##Create backup folder
+
+
+##DEAW get configure folder
+#backup_configuration_of_DEAW01_cpf1_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW01_cpf1/"$DEAW01_CPF1"/
+/bin/cp DEAW01_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAW01_cpf1.xml
+
+#backup_configuration_of_DEAW02_cpf1_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW02_cpf1/"$DEAW02_CPF1"/
+/bin/cp DEAW02_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAW02_cpf1.xml
+
+#backup_configuration_of_DEAW_DEFAULT_LB_CONFIGURATION_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/"$DEAW_DEFAULT_LB_CONFIGURATION"/
+/bin/cp DEFAULT_LB_CONFIGURATION.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_DEFAULT_LB_CONFIGURATION.xml
+
+#backup_configuration_of_DEAW_FEP_P_SCTP_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/"$DEAW_FEP_P_SCTP"/
+/bin/cp fep-p-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_fep-p-sctp.xml
+
+#backup_configuration_of_DEAW_FEP_R_SCTP_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/"$DEAW_FEP_R_SCTP"/
+/bin/cp fep-r-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_fep-r-sctp.xml
+
+#backup_configuration_of_DEAW_FLOW_MANAGER_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/"$DEAW_FLOWMGR"/
+/bin/cp flowManager.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_flowManager.xml
+
+#backup_ip_address_info_at_SDC_and_EMS
+/sbin/ifconfig |egrep 'bond|eth|inet addr' > /DeaConfigureBackupDaily/"$DATE"_`hostname`_ifconfig
+
+#backup_routing_file_at_SDC
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-r-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-p-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+
+
+##FTP_upload for DEAW
+ftp -n $HOST <<END_SCRIPT
+quote USER $USER
+quote PASS $PASSWD
+cd /opt/ftp/tacm_dea/cfgdiff
+lcd /DeaConfigureBackupDaily/
+put "$DATE"_DEAW01_cpf1.xml
+put "$DATE"_DEAW02_cpf1.xml
+put "$DATE"_DEAW_DEFAULT_LB_CONFIGURATION.xml
+put "$DATE"_DEAW_fep-p-sctp.xml
+put "$DATE"_DEAW_fep-r-sctp.xml
+put "$DATE"_DEAW_flowManager.xml
+put "$DATE"_`hostname`_ifconfig
+#put "$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#put "$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+quit
+END_SCRIPT
+##FTP_upload for DEAW
+
+unset DATE
+unset DEAW01_CPF1
+unset DEAW02_CPF1
+unset DEAW_DEFAULT_LB_CONFIGURATION
+unset DEAW_FEP_P_SCTP
+unset DEAW_FEP_R_SCTP
+unset DEAW_FLOWMGR
+
+
+##DEAX get configure folder
+#backup_configuration_of_DEAX01_cpf1_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX01_cpf1/"$DEAX01_CPF1"/
+#/bin/cp DEAX01_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAX01_cpf1.xml
+
+#backup_configuration_of_DEAX02_cpf1_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX02_cpf1/"$DEAX02_CPF1"/
+#/bin/cp DEAX02_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAX02_cpf1.xml
+
+#backup_configuration_of_DEAX_DEFAULT_LB_CONFIGURATION_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/"$DEAX_DEFAULT_LB_CONFIGURATION"/
+#/bin/cp DEFAULT_LB_CONFIGURATION.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_DEFAULT_LB_CONFIGURATION.xml
+
+#backup_configuration_of_DEAX_FEP_P_SCTP_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/"$DEAX_FEP_P_SCTP"/
+#/bin/cp fep-p-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_fep-p-sctp.xml
+
+#backup_configuration_of_DEAX_FEP_R_SCTP_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/"$DEAX_FEP_R_SCTP"/
+#/bin/cp fep-r-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_fep-r-sctp.xml
+
+#backup_configuration_of_DEAX_FLOW_MANAGER_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/"$DEAX_FLOWMGR"/
+#/bin/cp flowManager.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_flowManager.xml
+
+#backup_ip_address_info_at_SDC_and_EMS
+#/sbin/ifconfig |egrep 'bond|eth|inet addr' > /DeaConfigureBackupDaily/"$DATE"_`hostname`_ifconfig
+
+#backup_routing_file_at_SDC
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-r-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-p-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+
+##FTP_upload for DEAX
+#ftp -n $HOST <<END_SCRIPT
+#quote USER $USER
+#quote PASS $PASSWD
+#cd /opt/ftp/tacm_dea/synccheck
+#lcd /DeaConfigureBackupDaily/
+#put "$DATE"_DEAX01_cpf1.xml
+#put "$DATE"_DEAX02_cpf1.xml
+#put "$DATE"_DEAX_DEFAULT_LB_CONFIGURATION.xml
+#put "$DATE"_DEAX_fep-p-sctp.xml
+#put "$DATE"_DEAX_fep-r-sctp.xml
+#put "$DATE"_DEAX_flowManager.xml
+#put "$DATE"_`hostname`_ifconfig
+#put "$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#put "$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+#quit
+#END_SCRIPT
+#FTP_upload for DEAX
+
+#unset DATE
+#unset DEAX01_CPF1
+#unset DEAX02_CPF1
+#unset DEAX_DEFAULT_LB_CONFIGURATION
+#unset DEAX_FEP_P_SCTP
+#unset DEAX_FEP_R_SCTP
+#unset DEAX_FLOWMGR
+
+########################
+-rwxr-xr-x 1 root root 7910 Aug  2  2017 /root/20170106_DEAX_config_diff.sh
+
+#!/bin/bash
+
+HOST="172.18.9.183"
+USER="tacm_dea"
+PASSWD="tacm_dea@1234"
+DATE=`date +%Y%m%d_%H%M`
+##DEAW variable decalration
+#configure_folder
+#DEAW01_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW01_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAW02_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW02_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAW_DEFAULT_LB_CONFIGURATION=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/ DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAW_FEP_P_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#DEAW_FEP_R_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#flowManager_folder
+#DEAW_FLOWMGR=$(/bin/ls -lort /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/ |tail -2 |egrep \d |awk '{print $8}')
+##DEAWDEAW variable decalration
+
+
+##DEAX variable decalration
+#configure_folder
+DEAX01_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX01_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+DEAX02_CPF1=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX02_cpf1/ |tail -2 |egrep \d |awk '{print $8}')
+DEAX_DEFAULT_LB_CONFIGURATION=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/ |tail -2 |egrep \d |awk '{print $8}')
+DEAX_FEP_P_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+DEAX_FEP_R_SCTP=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/ |tail -2 |egrep \d |awk '{print $8}')
+#flowManager_folder
+DEAX_FLOWMGR=$(/bin/ls -lort /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/ |tail -2 |egrep \d |awk '{print $8}')
+##DEAX variable decalration
+
+
+##Create backup folder
+if [ ! -d /DeaConfigureBackupDaily/ ]; then
+mkdir /DeaConfigureBackupDaily/
+fi
+##Create backup folder
+
+
+##DEAW get configure folder
+#backup_configuration_of_DEAW01_cpf1_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW01_cpf1/"$DEAW01_CPF1"/
+#/bin/cp DEAW01_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAW01_cpf1.xml
+
+#backup_configuration_of_DEAW02_cpf1_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAW02_cpf1/"$DEAW02_CPF1"/
+#/bin/cp DEAW02_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAW02_cpf1.xml
+
+#backup_configuration_of_DEAW_DEFAULT_LB_CONFIGURATION_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/"$DEAW_DEFAULT_LB_CONFIGURATION"/
+#/bin/cp DEFAULT_LB_CONFIGURATION.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_DEFAULT_LB_CONFIGURATION.xml
+
+#backup_configuration_of_DEAW_FEP_P_SCTP_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/"$DEAW_FEP_P_SCTP"/
+#/bin/cp fep-p-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_fep-p-sctp.xml
+
+#backup_configuration_of_DEAW_FEP_R_SCTP_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/"$DEAW_FEP_R_SCTP"/
+#/bin/cp fep-r-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_fep-r-sctp.xml
+
+#backup_configuration_of_DEAW_FLOW_MANAGER_at_DEAEMS
+#cd /opt/traffix/sdc/data/backup/CHO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/"$DEAW_FLOWMGR"/
+#/bin/cp flowManager.xml /DeaConfigureBackupDaily/"$DATE"_DEAW_flowManager.xml
+
+#backup_ip_address_info_at_SDC_and_EMS
+#/sbin/ifconfig |egrep 'bond|eth|inet addr' > /DeaConfigureBackupDaily/"$DATE"_`hostname`_ifconfig
+
+#backup_routing_file_at_SDC
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-r-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-p-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+
+
+##FTP_upload for DEAW
+#ftp -n $HOST <<END_SCRIPT
+#quote USER $USER
+#quote PASS $PASSWD
+#cd /opt/ftp/tacm_dea/synccheck
+#lcd /DeaConfigureBackupDaily/
+#put "$DATE"_DEAW01_cpf1.xml
+#put "$DATE"_DEAW02_cpf1.xml
+#put "$DATE"_DEAW_DEFAULT_LB_CONFIGURATION.xml
+#put "$DATE"_DEAW_fep-p-sctp.xml
+#put "$DATE"_DEAW_fep-r-sctp.xml
+#put "$DATE"_DEAW_flowManager.xml
+#put "$DATE"_`hostname`_ifconfig
+#put "$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#put "$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+#quit
+#END_SCRIPT
+#FTP_upload for DEAW
+
+#unset DATE
+#unset DEAW01_CPF1
+#unset DEAW02_CPF1
+#unset DEAW_DEFAULT_LB_CONFIGURATION
+#unset DEAW_FEP_P_SCTP
+#unset DEAW_FEP_R_SCTP
+#unset DEAW_FLOWMGR
+
+
+##DEAX get configure folder
+#backup_configuration_of_DEAX01_cpf1_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX01_cpf1/"$DEAX01_CPF1"/
+/bin/cp DEAX01_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAX01_cpf1.xml
+
+#backup_configuration_of_DEAX02_cpf1_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEAX02_cpf1/"$DEAX02_CPF1"/
+/bin/cp DEAX02_cpf1.xml /DeaConfigureBackupDaily/"$DATE"_DEAX02_cpf1.xml
+
+#backup_configuration_of_DEAX_DEFAULT_LB_CONFIGURATION_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/DEFAULT_LB_CONFIGURATION/"$DEAX_DEFAULT_LB_CONFIGURATION"/
+/bin/cp DEFAULT_LB_CONFIGURATION.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_DEFAULT_LB_CONFIGURATION.xml
+
+#backup_configuration_of_DEAX_FEP_P_SCTP_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-p-sctp/"$DEAX_FEP_P_SCTP"/
+/bin/cp fep-p-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_fep-p-sctp.xml
+
+#backup_configuration_of_DEAX_FEP_R_SCTP_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/configuration/fep-r-sctp/"$DEAX_FEP_R_SCTP"/
+/bin/cp fep-r-sctp.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_fep-r-sctp.xml
+
+#backup_configuration_of_DEAX_FLOW_MANAGER_at_DEAEMS
+cd /opt/traffix/sdc/data/backup/NEO_SDC/DEAEMSX01_traffix_config_mgr-config1/flowManager/ALL/"$DEAX_FLOWMGR"/
+/bin/cp flowManager.xml /DeaConfigureBackupDaily/"$DATE"_DEAX_flowManager.xml
+
+#backup_ip_address_info_at_SDC_and_EMS
+/sbin/ifconfig |egrep 'bond|eth|inet addr' > /DeaConfigureBackupDaily/"$DATE"_`hostname`_ifconfig
+
+#backup_routing_file_at_SDC
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-r-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#/bin/cp /opt/traffix/sdc/config/sysconfig/route-traffix_fep-fep-p-sctp /DeaConfigureBackupDaily/"$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+
+##FTP_upload for DEAX
+ftp -n $HOST <<END_SCRIPT
+quote USER $USER
+quote PASS $PASSWD
+cd /opt/ftp/tacm_dea/cfgdiff
+lcd /DeaConfigureBackupDaily/
+put "$DATE"_DEAX01_cpf1.xml
+put "$DATE"_DEAX02_cpf1.xml
+put "$DATE"_DEAX_DEFAULT_LB_CONFIGURATION.xml
+put "$DATE"_DEAX_fep-p-sctp.xml
+put "$DATE"_DEAX_fep-r-sctp.xml
+put "$DATE"_DEAX_flowManager.xml
+#put "$DATE"_`hostname`_ifconfig
+#put "$DATE"_`hostname`_route-traffix_fep-fep-r-sctp
+#put "$DATE"_`hostname`_route-traffix_fep-fep-p-sctp
+quit
+END_SCRIPT
+##FTP_upload for DEAX
+
+unset DATE
+unset DEAX01_CPF1
+unset DEAX02_CPF1
+unset DEAX_DEFAULT_LB_CONFIGURATION
+unset DEAX_FEP_P_SCTP
+unset DEAX_FEP_R_SCTP
+unset DEAX_FLOWMGR
+
+########################
+-rwxrwxrwx 1 traffix traffix 69 Jan  9  2017 /root/DeaConfigureBackupDailyRemoveOldLog.sh
+
+#!/bin/bash
+
+find /DeaConfigureBackupDaily/ -type f -mtime +3 -delete
+
+########################
+-rwxrwxrwx 1 traffix traffix 909 Feb 17  2017 /root/DEA_interface_check.sh
+
+#!/bin/bash
+
+HOST="172.18.9.183"
+USER="tacm_dea"
+PASSWD="tacm_dea@1234"
+DATE=`date +%Y%m%d_%H%M`
+
+
+grep eth /var/log/message*  > /tmp/`hostname`_CheckInterface_"$DATE".log
+
+
+if [ -s /tmp/`hostname`_CheckInterface_"$DATE".log ]; then
+echo 'End_of_File' >> /tmp/`hostname`_CheckInterface_"$DATE".log
+
+ftp -n $HOST <<END_SCRIPT
+quote USER $USER
+quote PASS $PASSWD
+cd /opt/ftp/tacm_dea/cpfcheck
+lcd /tmp
+put `hostname`_CheckInterface_"$DATE".log
+quit
+END_SCRIPT
+
+/bin/sed -i 's/eth//g' /var/log/message*
+
+else
+echo 'End_of_File' >> /tmp/`hostname`_CheckInterface_"$DATE".log
+
+ftp -n $HOST <<END_SCRIPT
+quote USER $USER
+quote PASS $PASSWD
+cd /opt/ftp/tacm_dea/cpfcheck
+lcd /tmp
+put `hostname`_CheckInterface_"$DATE".log
+quit
+END_SCRIPT
+fi
+
+if [ ! -d /CheckInterface/ ]; then
+mkdir /CheckInterface/
+fi
+
+mv /tmp/`hostname`_CheckInterface_"$DATE".log  /CheckInterface/`hostname`_CheckInterface_"$DATE".log
+unset DATE
+
+########################
+-rwxrwxrwx 1 traffix traffix 60 Feb 17  2017 /root/DeaInterfaceCheckRemoveOldLog.sh
+
+#!/bin/bash
+
+find /CheckInterface/ -type f -mtime +3 -delete
