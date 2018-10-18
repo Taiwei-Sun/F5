@@ -1,13 +1,15 @@
 #!/bin/bash
+##20181011v2
 
 HOST="172.18.9.183"
 USER="tacm_dea"
 PASSWD="tacm_dea@1234"
 DATE=`date +%Y%m%d_%H%M`
+mDATE=`date +%b" "%d" "%H:%M --date '-1 min'`
 
-
-grep eth /var/log/message*  > /tmp/`hostname`_CheckInterface_"$DATE".log
-
+#grep eth /var/log/message*  > /tmp/`hostname`_CheckInterface_"$DATE".log
+grep "$mDATE"  /var/log/messages | grep eth > /tmp/`hostname`_CheckInterface_"$DATE".log
+#cat /var/log/messages | grep "$mDATE" | grep eth > /tmp/`hostname`_CheckInterface_"$DATE".log
 
 if [ -s /tmp/`hostname`_CheckInterface_"$DATE".log ]; then
 echo 'End_of_File' >> /tmp/`hostname`_CheckInterface_"$DATE".log
@@ -21,8 +23,8 @@ put `hostname`_CheckInterface_"$DATE".log
 quit
 END_SCRIPT
 
-/bin/sed -i 's/eth//g' /var/log/message*
-
+#/bin/sed -i 's/eth//g' /var/log/message*
+##
 else
 echo 'End_of_File' >> /tmp/`hostname`_CheckInterface_"$DATE".log
 
