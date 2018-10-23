@@ -1,5 +1,5 @@
 #!/bin/bash
-##20181011v2
+##20181023v3	add filter "grep -v martian"
 
 HOST="172.18.9.183"
 USER="tacm_dea"
@@ -8,7 +8,7 @@ DATE=`date +%Y%m%d_%H%M`
 mDATE=`date +%b" "%d" "%H:%M --date '-1 min'`
 
 #grep eth /var/log/message*  > /tmp/`hostname`_CheckInterface_"$DATE".log
-grep "$mDATE"  /var/log/messages | grep eth > /tmp/`hostname`_CheckInterface_"$DATE".log
+grep "$mDATE"  /var/log/messages | grep eth | grep -v martian > /tmp/`hostname`_CheckInterface_"$DATE".log
 #cat /var/log/messages | grep "$mDATE" | grep eth > /tmp/`hostname`_CheckInterface_"$DATE".log
 
 if [ -s /tmp/`hostname`_CheckInterface_"$DATE".log ]; then
