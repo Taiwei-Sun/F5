@@ -1,0 +1,25 @@
+0 2 * * *  /root/msgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_msg.log
+*/10 * * * *  /root/webuiftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_webui.log
+0 3 * * *  /root/cfgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_cfg.log
+
+0 1 * * * /opt/traffix/sdc/utils/system/linux/backup_and_restore/backup_traffix_no_splunk.sh
+0 * * * * /root/fep_interconnect_check.sh
+0 6 */3 * * /root/RemoveOldLogFilterFep.sh
+
+#20170221_for_config_diff
+#* 4 * * * /root/20170106_DEAW_SDC_config_diff_production.sh
+0 4 * * * /root/20170106_DEAX_SDC_config_diff_production.sh
+10 6 */3 * * /root/DeaConfigureBackupDailyRemoveOldLog.sh
+
+#20170221_for_interface_check
+* */1 * * * /root/DEA_interface_check.sh
+0 6 */3 * * /root/DeaInterfaceCheckRemoveOldLog.sh
+
+#20170921_for_ambr_check
+0 */3 * * * /root/DEA_AMBR_check.sh
+20 6 */3 * * /root/DeaAMBRCheckRemoveOldLog.sh
+
+#20180301_for_overload_control_alarm
+*/10 * * * * /root/autoOverloadControlAlarm-v2.2.sh
+
+#0 4 * * * /root/msg_syncer.sh > /tmp/`hostname`_msg_syncer.log

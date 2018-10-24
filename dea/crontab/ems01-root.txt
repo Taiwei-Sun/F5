@@ -1,0 +1,26 @@
+20 * * * * /usr/bin/rsync -avru /var/lib//tomcat/webapps installerclient@172.18.8.141::installer --password-file=/etc/rsyncd.secrets
+
+0 2 * * *  /root/msgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_msg.log
+0 2 * * *  /root/tdr_tarftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_tdrtar.log
+*/30 * * * *  /root/tdr_uploadftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_tdr_15mins.log
+*/10 * * * *  /root/webuiftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_webui.log
+15 3 * * *  /root/cfgftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_cfg.log
+
+30 1 * * * /opt/traffix/sdc/utils/system/linux/backup_and_restore/backup_traffix_no_splunk.sh
+0 4 * * *  /root/autocsvftp.sh >> /opt/traffix/sdc/logs/webui/codeftp_autocsv.log
+05 00 * * *  /opt/splunksearch/splunk/bin/scripts/autoreporting.sh
+
+#time sync
+0 0 * * * /usr/sbin/ntpdate -s 172.18.0.101
+
+#20170221_for_config_diff
+0 4 * * * /root/20170106_DEAW_config_diff.sh
+0 4 * * * /root/20170106_DEAX_config_diff.sh
+10 6 */3 * * /root/DeaConfigureBackupDailyRemoveOldLog.sh
+
+#20170221_for_interface_check
+* */1 * * * /root/DEA_interface_check.sh
+0 6 */3 * * /root/DeaInterfaceCheckRemoveOldLog.sh
+
+
+#0 4 * * * /root/msg_syncer.sh > /tmp/`hostname`_msg_syncer.log
