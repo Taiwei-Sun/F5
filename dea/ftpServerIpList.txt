@@ -1,0 +1,14 @@
+sdc: cfgftp.sh, DEA_interface_check.sh, webuiftp.sh, 20170106_DEAW_SDC_config_diff_production.sh, autoOverloadControlAlarm-v2.2.sh, DEA_AMBR_check.sh, fep_interconnect_check.sh
+
+autocsvftp.sh 172.27.21.120
+cfgftp.sh 172.18.9.188 172.18.9.183 #sdc
+DEA_interface_check.sh 172.18.9.183 #sdc
+msgftp.sh 172.18.9.183 
+tdr_tarftp.sh 172.27.21.120
+tdr_uploadftp.sh 172.17.34.18 172.16.20.195 172.16.22.147
+webuiftp.sh 172.18.9.183 #sdc
+
+20170106_DEAW_SDC_config_diff_production.sh 172.18.9.183
+autoOverloadControlAlarm-v2.2.sh 172.18.9.183
+DEA_AMBR_check.sh 172.18.9.183
+fep_interconnect_check.sh 172.18.9.183
