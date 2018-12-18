@@ -33,20 +33,19 @@ TDR_N=`find /opt/traffix/reports/tdr -maxdepth 1 -mmin -30 -type f  -exec basena
         0)
             alarm_sign="No TDR file found !! "
             alarm_log
-			exit 0
+            exit 0
             ;;
         1)
             alarm_sign="Tdr correct as one"
             alarm_log
-			pre_ftp
+            pre_ftp
             ;;
         *)
             alarm_sign="Tdr found more than one, abnormal !!"
             alarm_log
-			pre_ftp
+            pre_ftp
             ;;
     esac
-exit 0
 }
 
 alarm_log(){
@@ -99,6 +98,7 @@ echo `hostname`_`date +%Y%m%d%H%M%S`"--"$host >> /tmp/uploaded_log.txt
 }
 
 check_tdr
+
 mv -f $localdir$tfile/* $localdir/tmp_tarfile/.
 
 
