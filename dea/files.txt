@@ -7,10 +7,10 @@
 /etc/motd
 /etc/ntp.conf
 /etc/sysconfig/modules/
-/opt/traffix/sdc/data
+/opt/traffix/sdc/data/
 /etc/selinux/config
-/opt/traffix/sdc/config
-/etc/sysconfig/network-scripts
+/opt/traffix/sdc/config/
+/etc/sysconfig/network-scripts/
 /etc/sysconfig/network
 /etc/corosync/corosync.conf
 /etc/corosync/service.d/pcmk
