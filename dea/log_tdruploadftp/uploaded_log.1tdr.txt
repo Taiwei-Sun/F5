@@ -1,0 +1,15 @@
+
+sdc_20181217002327
+Tdr correct as one
+total 12
+-rw-r--r-- 1 root root    0 Dec 16 23:58 tdr_export_18-09-2018_13:54:59.csv.gz
+drwxr-xr-x 2 root root 4096 Dec 17 00:21 tmp_file
+drwxr-xr-x 2 root root 4096 Dec 17 00:21 tmp_tarfile
+drwxr-xr-x 2 root root 4096 Jun 17 21:37 tmp_tarfile2
+######################
+total 0
+-rw-r--r-- 1 root root 0 Dec 16 23:58 tdr_export_18-09-2018_13:54:59.csv.gz.upload
+sdc_20181217002328--172.18.207.10
+total 0
+-rw-r--r-- 1 root root 0 Dec 16 23:58 tdr_export_18-09-2018_13:54:59.csv.gz.upload
+sdc_20181217002333--172.18.207.10

@@ -1,0 +1,8 @@
+
+sdc_20181217002558
+No TDR file found !!
+total 12
+drwxr-xr-x 2 root root 4096 Dec 17 00:23 tmp_file
+drwxr-xr-x 2 root root 4096 Dec 17 00:23 tmp_tarfile
+drwxr-xr-x 2 root root 4096 Jun 17 21:37 tmp_tarfile2
+######################
