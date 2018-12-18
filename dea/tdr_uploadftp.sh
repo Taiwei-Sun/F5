@@ -33,16 +33,17 @@ TDR_N=`find /opt/traffix/reports/tdr -maxdepth 1 -mmin -30 -type f  -exec basena
         0)
             alarm_sign="No TDR file found !! "
             alarm_log
+			exit 0
             ;;
         1)
             alarm_sign="Tdr correct as one"
             alarm_log
-	    pre_ftp
+			pre_ftp
             ;;
         *)
             alarm_sign="Tdr found more than one, abnormal !!"
             alarm_log
-	    pre_ftp
+			pre_ftp
             ;;
     esac
 exit 0
