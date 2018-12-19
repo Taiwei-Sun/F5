@@ -1,5 +1,6 @@
 #!/bin/sh
-###2018 1218 v6. for upload tdr > one
+###2018 1218 v7. for upload tdr > one
+###cp -u /opt/traffix/reports/tdr/* /tmp/ftp_dump
 #echo > /tmp/uploaded_log.txt
 
 #host1=("user1" "user123" "/home/user1" "172.18.207.10")
@@ -79,7 +80,7 @@ cp -a $localdir/$line $localdir/tmp_file/$line".upload"
 #ls -l $localdir/tmp_file/$line".upload" >> /tmp/uploaded_log.txt
 done
 ls -l $localdir/tmp_file/ >> /tmp/uploaded_log.txt
-cp -a $localdir/tmp_file/* /tmp/ftp_dump/
+#cp -a $localdir/tmp_file/* /tmp/ftp_dump/
 
 echo "open $host
 user $id $pw
@@ -97,6 +98,7 @@ echo `hostname`_`date +%Y%m%d%H%M%S`"--"$host >> /tmp/uploaded_log.txt
 #mv -f $localdir$tfile/* $localdir/tmp_tarfile/.
 }
 
+cp -u /opt/traffix/reports/tdr/* /tmp/ftp_dump
 check_tdr
 
 mv -f $localdir$tfile/* $localdir/tmp_tarfile/.
